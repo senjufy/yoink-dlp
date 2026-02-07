@@ -142,6 +142,7 @@ ipcMain.on('download-video', async (_event, url, format) => {
     fs.writeFileSync(logFilePath, `Starting download for ${url}\n`);
 
     let downloadTimer: NodeJS.Timeout | null = null;
+    let had403Error: boolean = false; // Flag to track 403 errors
 
     const finalizeDownload = (message: string, success: boolean = true) => {
       if (downloadTimer) clearTimeout(downloadTimer);
@@ -175,6 +176,11 @@ ipcMain.on('download-video', async (_event, url, format) => {
 
     ytdlp.stderr.on('data', (data) => {
       const logData = data.toString();
+      if (logData.includes('HTTP Error 403: Forbidden')) {
+        had403Error = true;
+        // Optionally, send a specific warning to the renderer without stopping progress
+        win?.webContents.send('download-warning', 'Encountered HTTP Error 403: Forbidden, but download might continue.');
+      }
       win?.webContents.send('download-progress', logData);
       fs.appendFileSync(logFilePath, logData);
       resetDownloadTimer(); // Reset timer on output
@@ -184,7 +190,11 @@ ipcMain.on('download-video', async (_event, url, format) => {
       fs.appendFileSync(logFilePath, `\nProcess closed with code: ${code}\n`);
       if (downloadTimer) clearTimeout(downloadTimer); // Clear timer as process is truly closed
       if (code === 0) {
-        finalizeDownload('Download finished successfully (process closed).', true);
+        if (had403Error) {
+          finalizeDownload('Download finished successfully with warnings (HTTP Error 403 encountered).', true);
+        } else {
+          finalizeDownload('Download finished successfully (process closed).', true);
+        }
       } else {
         finalizeDownload(`child process exited with code ${code}`, false);
       }

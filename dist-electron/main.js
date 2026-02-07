@@ -99,6 +99,7 @@ ipcMain.on("download-video", async (_event, url, format) => {
     fs.writeFileSync(logFilePath, `Starting download for ${url}
 `);
     let downloadTimer = null;
+    let had403Error = false;
     const finalizeDownload = (message, success = true) => {
       if (downloadTimer) clearTimeout(downloadTimer);
       if (ytdlp.pid && !ytdlp.killed) {
@@ -129,6 +130,10 @@ yt-dlp process forcefully killed due to: ${message}
     });
     ytdlp.stderr.on("data", (data) => {
       const logData = data.toString();
+      if (logData.includes("HTTP Error 403: Forbidden")) {
+        had403Error = true;
+        win == null ? void 0 : win.webContents.send("download-warning", "Encountered HTTP Error 403: Forbidden, but download might continue.");
+      }
       win == null ? void 0 : win.webContents.send("download-progress", logData);
       fs.appendFileSync(logFilePath, logData);
       resetDownloadTimer();
@@ -139,7 +144,11 @@ Process closed with code: ${code}
 `);
       if (downloadTimer) clearTimeout(downloadTimer);
       if (code === 0) {
-        finalizeDownload("Download finished successfully (process closed).", true);
+        if (had403Error) {
+          finalizeDownload("Download finished successfully with warnings (HTTP Error 403 encountered).", true);
+        } else {
+          finalizeDownload("Download finished successfully (process closed).", true);
+        }
       } else {
         finalizeDownload(`child process exited with code ${code}`, false);
       }

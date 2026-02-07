@@ -31,6 +31,7 @@ function App() {
   const [showLogs, setShowLogs] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null); // New state for warnings
   const logsEndRef = useRef<HTMLTextAreaElement>(null);
 
   // --- Logic ---
@@ -46,6 +47,7 @@ function App() {
     const handleDownloadFinished = () => {
       setIsDownloading(false);
       setProgress(100);
+      setWarningMessage(null); // Clear warning on finish
       fetchHistory();
       setTimeout(() => setProgress(0), 3000);
     };
@@ -67,12 +69,19 @@ function App() {
       }
     };
 
+    const handleDownloadWarning = (_event: any, message: string) => {
+      setWarningMessage(message);
+      setLogs((prevLogs) => prevLogs + `\nWARNING: ${message}\n`);
+    };
+
     // @ts-ignore
     window.ipcRenderer.on('download-progress', handleProgress);
     // @ts-ignore
     window.ipcRenderer.on('download-finished', handleDownloadFinished);
     // @ts-ignore
     window.ipcRenderer.on('history-cleared', handleHistoryCleared);
+    // @ts-ignore
+    window.ipcRenderer.on('download-warning', handleDownloadWarning); // New listener
 
     return () => {
       // @ts-ignore
@@ -81,6 +90,8 @@ function App() {
       window.ipcRenderer.off('download-finished', handleDownloadFinished);
       // @ts-ignore
       window.ipcRenderer.off('history-cleared', handleHistoryCleared);
+      // @ts-ignore
+      window.ipcRenderer.off('download-warning', handleDownloadWarning); // Clean up new listener
     }
   }, []);
 
@@ -193,6 +204,13 @@ function App() {
               )}
             </button>
           </div>
+
+          {/* Warning Message */}
+          {warningMessage && (
+            <div className="mt-4 text-orange-400 text-sm sm:text-base text-center animate-pulse">
+              {warningMessage}
+            </div>
+          )}
 
           {/* Progress Bar */}
           <div className={`mt-4 sm:mt-6 transition-all duration-500 ${isDownloading || progress > 0 ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>
